@@ -30,11 +30,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
-	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/config"
 )
 
-const RecommendedKubeRCFileName = "kuberc"
+const (
+	RecommendedKubeRCFileName = "kuberc"
+	KubeRCTraceAnnotation     = "KubercCommandTrace"
+)
 
 var (
 	RecommendedConfigDir  = filepath.Join(homedir.HomeDir(), clientcmd.RecommendedHomeDir)
@@ -112,6 +114,16 @@ func (p *Preferences) Apply(rootCmd *cobra.Command, args []string, errOut io.Wri
 	if err != nil {
 		return args, err
 	}
+
+	existingPreRunE := rootCmd.PersistentPreRunE
+	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		if cmd.Annotations == nil {
+			cmd.Annotations = make(map[string]string)
+		}
+		// Sanitize command
+		cmd.Annotations[KubeRCTraceAnnotation] = strings.TrimSpace(rootCmd.Annotations[KubeRCTraceAnnotation])
+		return existingPreRunE(cmd, args)
+	}
 	return args, nil
 }
 
@@ -147,12 +159,14 @@ func (p *Preferences) applyOverrides(rootCmd *cobra.Command, kuberc *config.Pref
 				allShorthands[flag.Shorthand] = struct{}{}
 			}
 		})
+		overrideNameValueFlags := make([]string, 0, len(c.Options))
 
 		for _, fl := range c.Options {
 			existingFlag := cmd.Flag(fl.Name)
 			if existingFlag == nil {
 				return fmt.Errorf("invalid flag %s for command %s", fl.Name, c.Command)
 			}
+			overrideNameValueFlags = append(overrideNameValueFlags, fmt.Sprintf("--%s=%s", fl.Name, fl.Default))
 			if searchInArgs(existingFlag.Name, existingFlag.Shorthand, allShorthands, args) {
 				// Don't modify the value implicitly, if it is passed in args explicitly
 				continue
@@ -162,6 +176,11 @@ func (p *Preferences) applyOverrides(rootCmd *cobra.Command, kuberc *config.Pref
 				return fmt.Errorf("could not apply override value %s to flag %s in command %s err: %w", fl.Default, fl.Name, c.Command, err)
 			}
 		}
+		// Add annotation to trace back command built with default values set within kuberc
+		if rootCmd.Annotations == nil {
+			rootCmd.Annotations = make(map[string]string, 1)
+		}
+		rootCmd.Annotations[KubeRCTraceAnnotation] = fmt.Sprintf("%s %s", strings.Join(args, " "), strings.Join(overrideNameValueFlags, " "))
 	}
 
 	return nil
@@ -280,17 +299,11 @@ func (p *Preferences) applyAliases(rootCmd *cobra.Command, kuberc *config.Prefer
 	// We are appending the additional args defined in kuberc in here and
 	// expect that it will be passed along to the actual command.
 	rootCmd.SetArgs(args[1:])
+	// Add annotation to trace back command built without aliases applied
 	if rootCmd.Annotations == nil {
-		rootCmd.Annotations = make(map[string]string)
+		rootCmd.Annotations = make(map[string]string, 1)
 	}
-	rootCmd.Annotations["KubercCommandTrace"] = fmt.Sprintf("%s %s %s %s", aliasCommandName, strings.Join(aliasArgs.prependArgs, " "), strings.Join(aliasNameValueFlags, " "), strings.Join(aliasArgs.appendArgs, " "))
-	fmt.Println("DEBUG:" + rootCmd.Annotations["KubercCommandTrace"])
-	existingPreRunE := rootCmd.PersistentPreRunE
-	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		klog.V(1).Info(fmt.Sprintf("persistent-pre-run: kuberc command executed: kubectl args=%s;", rootCmd.Annotations["KubercCommandTrace"]))
-		return existingPreRunE(cmd, args)
-	}
-
+	rootCmd.Annotations[KubeRCTraceAnnotation] = fmt.Sprintf("%s %s %s %s", aliasCommandName, strings.Join(aliasArgs.prependArgs, " "), strings.Join(aliasNameValueFlags, " "), strings.Join(aliasArgs.appendArgs, " "))
 	return args, nil
 }
 

@@ -320,7 +320,7 @@ func NewKubectlCommand(o KubectlOptions) *cobra.Command {
 		// respectively.
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			rest.SetDefaultWarningHandler(warningHandler)
-
+			klog.V(1).Info(fmt.Sprintf("kuberc command executed: kubectl %s", cmd.Annotations[kuberc.KubeRCTraceAnnotation]))
 			if cmd.Name() == cobra.ShellCompRequestCmd {
 				// This is the __complete or __completeNoDesc command which
 				// indicates shell completion has been requested.
