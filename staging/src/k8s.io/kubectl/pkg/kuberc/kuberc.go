@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
+	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/config"
 )
 
@@ -179,7 +180,7 @@ func (p *Preferences) applyAliases(rootCmd *cobra.Command, kuberc *config.Prefer
 	}
 
 	var aliasArgs *aliasing
-
+	var aliasCommandName string
 	var commandName string // first "non-flag" arguments
 	var commandIndex int
 	for index, arg := range args[1:] {
@@ -212,6 +213,7 @@ func (p *Preferences) applyAliases(rootCmd *cobra.Command, kuberc *config.Prefer
 		newCmd.Use = alias.Name
 		newCmd.Aliases = []string{}
 		aliasCmd := &newCmd
+		aliasCommandName = alias.Command
 
 		aliasArgs = &aliasing{
 			prependArgs: alias.PrependArgs,
@@ -244,7 +246,7 @@ func (p *Preferences) applyAliases(rootCmd *cobra.Command, kuberc *config.Prefer
 			allShorthands[flag.Shorthand] = struct{}{}
 		}
 	})
-
+	aliasNameValueFlags := make([]string, 0, len(aliasArgs.flags))
 	for _, fl := range aliasArgs.flags {
 		existingFlag := foundAliasCmd.Flag(fl.Name)
 		if existingFlag == nil {
@@ -258,6 +260,7 @@ func (p *Preferences) applyAliases(rootCmd *cobra.Command, kuberc *config.Prefer
 		if err != nil {
 			return args, fmt.Errorf("could not apply value %s to flag %s in alias %s err: %w", fl.Default, fl.Name, args[0], err)
 		}
+		aliasNameValueFlags = append(aliasNameValueFlags, fmt.Sprintf("--%s=%s", fl.Name, fl.Default))
 	}
 
 	if len(aliasArgs.prependArgs) > 0 {
@@ -277,6 +280,17 @@ func (p *Preferences) applyAliases(rootCmd *cobra.Command, kuberc *config.Prefer
 	// We are appending the additional args defined in kuberc in here and
 	// expect that it will be passed along to the actual command.
 	rootCmd.SetArgs(args[1:])
+	if rootCmd.Annotations == nil {
+		rootCmd.Annotations = make(map[string]string)
+	}
+	rootCmd.Annotations["KubercCommandTrace"] = fmt.Sprintf("%s %s %s %s", aliasCommandName, strings.Join(aliasArgs.prependArgs, " "), strings.Join(aliasNameValueFlags, " "), strings.Join(aliasArgs.appendArgs, " "))
+	fmt.Println("DEBUG:" + rootCmd.Annotations["KubercCommandTrace"])
+	existingPreRunE := rootCmd.PersistentPreRunE
+	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		klog.V(1).Info(fmt.Sprintf("persistent-pre-run: kuberc command executed: kubectl args=%s;", rootCmd.Annotations["KubercCommandTrace"]))
+		return existingPreRunE(cmd, args)
+	}
+
 	return args, nil
 }
 
