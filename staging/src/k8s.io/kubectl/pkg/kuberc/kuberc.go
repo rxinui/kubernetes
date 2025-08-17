@@ -114,16 +114,6 @@ func (p *Preferences) Apply(rootCmd *cobra.Command, args []string, errOut io.Wri
 	if err != nil {
 		return args, err
 	}
-
-	existingPreRunE := rootCmd.PersistentPreRunE
-	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		if cmd.Annotations == nil {
-			cmd.Annotations = make(map[string]string)
-		}
-		// Sanitize command
-		cmd.Annotations[KubeRCTraceAnnotation] = strings.TrimSpace(rootCmd.Annotations[KubeRCTraceAnnotation])
-		return existingPreRunE(cmd, args)
-	}
 	return args, nil
 }
 
@@ -134,7 +124,6 @@ func (p *Preferences) applyOverrides(rootCmd *cobra.Command, kuberc *config.Pref
 	if err != nil {
 		return nil
 	}
-
 	for _, c := range kuberc.Defaults {
 		parsedCmds := strings.Fields(c.Command)
 		overrideCmd, _, err := rootCmd.Find(parsedCmds)
@@ -180,7 +169,9 @@ func (p *Preferences) applyOverrides(rootCmd *cobra.Command, kuberc *config.Pref
 		if rootCmd.Annotations == nil {
 			rootCmd.Annotations = make(map[string]string, 1)
 		}
-		rootCmd.Annotations[KubeRCTraceAnnotation] = fmt.Sprintf("%s %s", strings.Join(args, " "), strings.Join(overrideNameValueFlags, " "))
+		rootCmd.Annotations[KubeRCTraceAnnotation] = strings.TrimSpace(
+			fmt.Sprintf("%s %s", strings.Join(args, " "), strings.Join(overrideNameValueFlags, " ")),
+		)
 	}
 
 	return nil
@@ -303,7 +294,9 @@ func (p *Preferences) applyAliases(rootCmd *cobra.Command, kuberc *config.Prefer
 	if rootCmd.Annotations == nil {
 		rootCmd.Annotations = make(map[string]string, 1)
 	}
-	rootCmd.Annotations[KubeRCTraceAnnotation] = fmt.Sprintf("%s %s %s %s", aliasCommandName, strings.Join(aliasArgs.prependArgs, " "), strings.Join(aliasNameValueFlags, " "), strings.Join(aliasArgs.appendArgs, " "))
+	rootCmd.Annotations[KubeRCTraceAnnotation] = strings.TrimSpace(
+		fmt.Sprintf("%s %s %s %s", aliasCommandName, strings.Join(aliasArgs.prependArgs, " "), strings.Join(aliasNameValueFlags, " "), strings.Join(aliasArgs.appendArgs, " ")),
+	)
 	return args, nil
 }
 
