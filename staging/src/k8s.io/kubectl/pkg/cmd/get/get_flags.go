@@ -36,9 +36,9 @@ type PrintFlags struct {
 	CustomColumnsFlags *CustomColumnsPrintFlags
 	HumanReadableFlags *HumanPrintFlags
 	TemplateFlags      *genericclioptions.KubeTemplatePrintFlags
-
-	NoHeaders    *bool
-	OutputFormat *string
+	ExtraColumnsFlags  *ExtraColumnsPrintFlags
+	NoHeaders          *bool
+	OutputFormat       *string
 }
 
 // SetKind sets the Kind option of humanreadable flags
@@ -71,6 +71,7 @@ func (f *PrintFlags) AllowedFormats() []string {
 	formats = append(formats, f.TemplateFlags.AllowedFormats()...)
 	formats = append(formats, f.CustomColumnsFlags.AllowedFormats()...)
 	formats = append(formats, f.HumanReadableFlags.AllowedFormats()...)
+	formats = append(formats, f.ExtraColumnsFlags.AllowedFormats()...)
 	return formats
 }
 
@@ -88,6 +89,7 @@ func (f *PrintFlags) ToPrinter() (printers.ResourcePrinter, error) {
 	}
 	f.HumanReadableFlags.NoHeaders = noHeaders
 	f.CustomColumnsFlags.NoHeaders = noHeaders
+	f.ExtraColumnsFlags.NoHeaders = noHeaders
 
 	// for "get.go" we want to support a --template argument given, even when no --output format is provided
 	if f.TemplateFlags.TemplateArgument != nil && len(*f.TemplateFlags.TemplateArgument) > 0 && len(outputFormat) == 0 {
@@ -118,6 +120,10 @@ func (f *PrintFlags) ToPrinter() (printers.ResourcePrinter, error) {
 		return p, err
 	}
 
+	if p, err := f.ExtraColumnsFlags.ToPrinter(outputFormat); !genericclioptions.IsNoCompatiblePrinterError(err) {
+		return p, err
+	}
+
 	return nil, genericclioptions.NoCompatiblePrinterError{OutputFormat: &outputFormat, AllowedFormats: f.AllowedFormats()}
 }
 
@@ -129,6 +135,7 @@ func (f *PrintFlags) AddFlags(cmd *cobra.Command) {
 	f.TemplateFlags.AddFlags(cmd)
 	f.HumanReadableFlags.AddFlags(cmd)
 	f.CustomColumnsFlags.AddFlags(cmd)
+	f.ExtraColumnsFlags.AddFlags(cmd)
 
 	if f.OutputFormat != nil {
 		cmd.Flags().StringVarP(f.OutputFormat, "output", "o", *f.OutputFormat, fmt.Sprintf(`Output format. One of: (%s). See custom columns [https://kubernetes.io/docs/reference/kubectl/#custom-columns], golang template [http://golang.org/pkg/text/template/#pkg-overview] and jsonpath template [https://kubernetes.io/docs/reference/kubectl/jsonpath/].`, strings.Join(f.AllowedFormats(), ", ")))
@@ -166,5 +173,6 @@ func NewGetPrintFlags() *PrintFlags {
 
 		HumanReadableFlags: NewHumanPrintFlags(),
 		CustomColumnsFlags: NewCustomColumnsPrintFlags(),
+		ExtraColumnsFlags:  NewExtraColumnsPrintFlags(),
 	}
 }

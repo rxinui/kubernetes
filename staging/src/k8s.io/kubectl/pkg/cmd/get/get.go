@@ -231,7 +231,8 @@ func (o *GetOptions) Complete(f cmdutil.Factory, cmd *cobra.Command, args []stri
 	}
 
 	// human readable printers have special conversion rules, so we determine if we're using one.
-	if (len(*o.PrintFlags.OutputFormat) == 0 && len(templateArg) == 0) || *o.PrintFlags.OutputFormat == "wide" {
+	// NOTE extraColumnsFormat is considered HumanReadablePrinter enabling default column headers in addition to NAMESPACE and NAME
+	if (len(*o.PrintFlags.OutputFormat) == 0 && len(templateArg) == 0) || *o.PrintFlags.OutputFormat == "wide" || *o.PrintFlags.OutputFormat == extraColumnsFormat {
 		o.IsHumanReadablePrinter = true
 	}
 
