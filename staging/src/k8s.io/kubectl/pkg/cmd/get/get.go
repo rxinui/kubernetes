@@ -226,7 +226,7 @@ func (o *GetOptions) Complete(f cmdutil.Factory, cmd *cobra.Command, args []stri
 	// with server side print. So in these cases force the old behavior.
 	// TODO (soltysh/rxinui): same for extra-columns
 	outputOption := cmd.Flags().Lookup("output").Value.String()
-	if strings.Contains(outputOption, "custom-columns") || outputOption == "yaml" || strings.Contains(outputOption, "json") || strings.Contains(outputOption, "extra-columns") {
+	if strings.Contains(outputOption, "custom-columns") || outputOption == "yaml" || strings.Contains(outputOption, "json") || strings.Contains(outputOption, extraColumnsFormat) {
 		o.ServerPrint = false
 	}
 
@@ -237,14 +237,19 @@ func (o *GetOptions) Complete(f cmdutil.Factory, cmd *cobra.Command, args []stri
 
 	// human readable printers have special conversion rules, so we determine if we're using one.
 	// NOTE extraColumnsFormat is considered HumanReadablePrinter enabling default column headers in addition to NAMESPACE and NAME
-	if (len(*o.PrintFlags.OutputFormat) == 0 && len(templateArg) == 0) || *o.PrintFlags.OutputFormat == "wide" || *o.PrintFlags.OutputFormat == extraColumnsFormat {
+	if (len(*o.PrintFlags.OutputFormat) == 0 && len(templateArg) == 0) || *o.PrintFlags.OutputFormat == "wide" {
 		o.IsHumanReadablePrinter = true
 	}
+
+	// TODO (rxinui): to merge with the statement above later
+	// if *o.PrintFlags.OutputFormat == extraColumnsFormat {
+	// 	o.IsHumanReadablePrinter = true
+	// }
 
 	o.ToPrinter = func(mapping *meta.RESTMapping, outputObjects *bool, withNamespace bool, withKind bool) (printers.ResourcePrinterFunc, error) {
 		// make a new copy of current flags / opts before mutating
 		printFlags := o.PrintFlags.Copy()
-
+		_debug("printFlags copied to %v", *printFlags.ExtraColumnsFlags)
 		if mapping != nil {
 			printFlags.SetKind(mapping.GroupVersionKind.GroupKind())
 		}
@@ -273,6 +278,14 @@ func (o *GetOptions) Complete(f cmdutil.Factory, cmd *cobra.Command, args []stri
 		if o.ServerPrint {
 			printer = &TablePrinter{Delegate: printer}
 		}
+
+		// NOTE (rxinui): to delete later
+		// switch printer.(type) {
+		// case *ExtraColumnsPrinter:
+		// 	_debug("printer returned is of type ExtraColumn")
+		// default:
+		// 	_debug("printer returned is NOT of type ExtraColumn: %T")
+		// }
 		return printer.PrintObj, nil
 	}
 
@@ -448,6 +461,7 @@ func (o *GetOptions) transformRequests(req *rest.Request) {
 // Run performs the get operation.
 // TODO: remove the need to pass these arguments, like other commands.
 func (o *GetOptions) Run(f cmdutil.Factory, args []string) error {
+	_debug("[begin Run() func]")
 	if len(o.Raw) > 0 {
 		restClient, err := f.RESTClient()
 		if err != nil {
@@ -489,6 +503,7 @@ func (o *GetOptions) Run(f cmdutil.Factory, args []string) error {
 	}
 
 	if !o.IsHumanReadablePrinter {
+		_debug("%v is NOT humanreadable mode, jumping to printGeneric func...", o.PrintFlags.OutputFormat)
 		return o.printGeneric(r)
 	}
 	_debug("%v is humanreadable mode", o.PrintFlags.OutputFormat)
@@ -568,7 +583,7 @@ func (o *GetOptions) Run(f cmdutil.Factory, args []string) error {
 
 			lastMapping = mapping
 		}
-
+		_debug("...about to print object using printer.PrintObj func")
 		printer.PrintObj(info.Object, w)
 	}
 	w.Flush()
@@ -580,6 +595,7 @@ func (o *GetOptions) Run(f cmdutil.Factory, args []string) error {
 			fmt.Fprintln(o.ErrOut, "No resources found")
 		}
 	}
+	_debug("[end of Run func]")
 	return utilerrors.NewAggregate(allErrs)
 }
 
@@ -734,7 +750,6 @@ func (o *GetOptions) printGeneric(r *resource.Result) error {
 		}
 		errs = append(errs, err)
 	}
-
 	if len(infos) == 0 && o.IgnoreNotFound {
 		return utilerrors.Reduce(utilerrors.Flatten(utilerrors.NewAggregate(errs)))
 	}
@@ -800,12 +815,14 @@ func (o *GetOptions) printGeneric(r *resource.Result) error {
 		for _, item := range items {
 			list.Items = append(list.Items, *item.(*unstructured.Unstructured))
 		}
+
+		_debug("calling within isList printer PrintObj func...")
 		if err := printer.PrintObj(list, o.Out); err != nil {
 			errs = append(errs, err)
 		}
 		return utilerrors.Reduce(utilerrors.Flatten(utilerrors.NewAggregate(errs)))
 	}
-
+	_debug("calling printer outside isList PrintObj func...")
 	if printErr := printer.PrintObj(obj, o.Out); printErr != nil {
 		errs = append(errs, printErr)
 	}

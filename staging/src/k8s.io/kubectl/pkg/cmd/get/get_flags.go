@@ -104,26 +104,31 @@ func (f *PrintFlags) ToPrinter() (printers.ResourcePrinter, error) {
 		f.CustomColumnsFlags.TemplateArgument = *f.TemplateFlags.TemplateArgument
 	}
 
+	_debug("PrintFlags ToPrinter func returns 1")
 	if p, err := f.JSONYamlPrintFlags.ToPrinter(outputFormat); !genericclioptions.IsNoCompatiblePrinterError(err) {
 		return p, err
 	}
+	if p, err := f.ExtraColumnsFlags.ToPrinter(outputFormat); !genericclioptions.IsNoCompatiblePrinterError(err) {
+		_debug("PrintFlags ToPrinter func returns ExtraColumnsPrinter")
+		return p, err
+	}
 
+	_debug("PrintFlags ToPrinter func returns 2")
 	if p, err := f.HumanReadableFlags.ToPrinter(outputFormat); !genericclioptions.IsNoCompatiblePrinterError(err) {
 		return p, err
 	}
 
+	_debug("PrintFlags ToPrinter func returns 3")
 	if p, err := f.CustomColumnsFlags.ToPrinter(outputFormat); !genericclioptions.IsNoCompatiblePrinterError(err) {
 		return p, err
 	}
 
+	_debug("PrintFlags ToPrinter func returns 4")
 	if p, err := f.NamePrintFlags.ToPrinter(outputFormat); !genericclioptions.IsNoCompatiblePrinterError(err) {
 		return p, err
 	}
 
-	if p, err := f.ExtraColumnsFlags.ToPrinter(outputFormat); !genericclioptions.IsNoCompatiblePrinterError(err) {
-		return p, err
-	}
-
+	_debug("PrintFlags ToPrinter func returns -1")
 	return nil, genericclioptions.NoCompatiblePrinterError{OutputFormat: &outputFormat, AllowedFormats: f.AllowedFormats()}
 }
 
