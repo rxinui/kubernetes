@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -143,6 +144,10 @@ var (
 const (
 	useServerPrintColumns = "server-print"
 )
+
+var _debug = func(sf string, s ...any) {
+	fmt.Fprintf(os.Stdout, "debug: "+sf+"\n", s...)
+}
 
 // NewGetOptions returns a GetOptions with default chunk size 500.
 func NewGetOptions(parent string, streams genericiooptions.IOStreams) *GetOptions {
@@ -486,7 +491,7 @@ func (o *GetOptions) Run(f cmdutil.Factory, args []string) error {
 	if !o.IsHumanReadablePrinter {
 		return o.printGeneric(r)
 	}
-
+	_debug("%v is humanreadable mode", o.PrintFlags.OutputFormat)
 	allErrs := []error{}
 	errs := sets.New[string]()
 	infos, err := r.Infos()
@@ -495,10 +500,12 @@ func (o *GetOptions) Run(f cmdutil.Factory, args []string) error {
 	}
 	printWithKind := multipleGVKsRequested(infos)
 
+	// NOTE (rxinui): add retrieved information Object to objs
 	objs := make([]runtime.Object, len(infos))
 	for ix := range infos {
 		objs[ix] = infos[ix].Object
 	}
+	_debug("objs=%v", objs)
 
 	var positioner OriginalPositioner
 	if len(o.SortBy) > 0 {

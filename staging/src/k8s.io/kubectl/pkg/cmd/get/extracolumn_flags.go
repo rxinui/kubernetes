@@ -24,6 +24,7 @@ import (
 	"github.com/spf13/cobra"
 
 	// "k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/cli-runtime/pkg/printers"
 	// "k8s.io/kubectl/pkg/scheme"
 )
@@ -36,6 +37,7 @@ type ExtraColumnsPrintFlags struct {
 	NoHeaders        bool
 	TemplateArgument string
 	*HumanPrintFlags
+	*CustomColumnsPrinter
 }
 
 func (f *ExtraColumnsPrintFlags) AllowedFormats() []string {
@@ -62,4 +64,16 @@ func NewExtraColumnsPrintFlags() *ExtraColumnsPrintFlags {
 		TemplateArgument: "",
 		HumanPrintFlags:  NewHumanPrintFlags(),
 	}
+}
+
+// ExtraColumnsPrinter should be Union of HumanReadablePrinter with CustomColumnsPrinter in that order
+type ExtraColumnsPrinter struct {
+	Columns                        []Column // should be HumanReadablePrinter column + CustomColumnsPrinter column
+	NoHeaders                      bool
+	*CustomColumnsPrinter          // has PrintObj (implements ResourcePrinter)
+	*printers.HumanReadablePrinter // has PrintObj (implements ResourcePrinter)
+}
+
+func (s *ExtraColumnsPrinter) PrintObj(obj runtime.Object, out io.Writer) error {
+	return nil
 }
